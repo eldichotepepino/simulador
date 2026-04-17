@@ -1643,29 +1643,49 @@ async function migrateData() {
   
   Confirm.show('¿Subir todos tus 160+ productos locales a la nube? Esto podría tardar unos segundos.', async () => {
     try {
-      const localData = JSON.parse(saved);
+      let localData;
+      try {
+        localData = JSON.parse(saved);
+      } catch (err) {
+        throw new Error('Formato de datos locales inválido.');
+      }
+
       const overlay = document.getElementById('loading-overlay');
       overlay.classList.add('active');
       document.querySelector('.loading-text').textContent = 'Migrando datos a Supabase, por favor espera...';
       
+      let successCount = 0;
+      let errorCount = 0;
+
       // Save all ingredients
-      if (localData.ingredients) {
-        for (const ing of localData.ingredients) { await Cloud.saveIngredient(ing); }
+      if (Array.isArray(localData.ingredients)) {
+        for (const ing of localData.ingredients) { 
+          if (!ing || !ing.id) continue;
+          const res = await Cloud.saveIngredient(ing); 
+          if(res) successCount++; else errorCount++;
+        }
       }
       
       // Save all products
-      if (localData.products) {
-        for (const prod of localData.products) { await Cloud.saveProduct(prod); }
+      if (Array.isArray(localData.products)) {
+        for (const prod of localData.products) { 
+          if (!prod || !prod.id) continue;
+          const res = await Cloud.saveProduct(prod); 
+          if(res) successCount++; else errorCount++;
+        }
       }
       
       // Save all fixed costs
-      if (localData.fixedCosts) {
-        for (const fc of localData.fixedCosts) { await Cloud.saveFixedCost(fc); }
+      if (Array.isArray(localData.fixedCosts)) {
+        for (const fc of localData.fixedCosts) { 
+          if (!fc || !fc.id) continue;
+          await Cloud.saveFixedCost(fc); 
+        }
       }
       
       // Save settings
       if (localData.settings) {
-         await Cloud.saveSettings(localData.settings);
+         try { await Cloud.saveSettings(localData.settings); } catch(e){}
       }
       
       // Reload from cloud
@@ -1675,16 +1695,15 @@ async function migrateData() {
       
       // Finish
       overlay.classList.remove('active');
-      document.querySelector('.loading-text').textContent = 'Conectando con la base de datos...'; // reset text
-      Toast.show('¡Migración completada con éxito! Todos tus productos están en la nube.', 'success');
+      document.querySelector('.loading-text').textContent = 'Conectando con la base de datos...';
+      Toast.show(`¡Migración completada! Éxitos: ${successCount}, Problemas: ${errorCount}. Todos tus productos ya están en la nube.`, 'success');
       
-      // Hide migrate button so they don't do it again
       document.getElementById('btn-migrate').style.display = 'none';
       
     } catch(e) {
       document.getElementById('loading-overlay').classList.remove('active');
-      Toast.show('Error al migrar los datos.', 'error');
-      console.error(e);
+      Toast.show('Error al migrar: ' + e.message, 'error');
+      console.error('Migration error:', e);
     }
   });
 }
