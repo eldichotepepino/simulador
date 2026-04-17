@@ -586,12 +586,12 @@ const Ingredients = {
 
       if (isEdit) {
         Object.assign(ing, { name, category, unit, purchaseQty, purchasePrice, costPerUnit });
-        Cloud.saveIngredient(ing, false);
+        Cloud.saveIngredient(ing);
         Toast.show('Ingrediente actualizado');
       } else {
         const newIng = { id: U.id('ing'), name, category, unit, purchaseQty, purchasePrice, costPerUnit };
         State.data.ingredients.push(newIng);
-        Cloud.saveIngredient(newIng, true);
+        Cloud.saveIngredient(newIng);
         Toast.show('Ingrediente agregado');
       }
       Modal.hide();
@@ -780,11 +780,11 @@ const Products = {
       if (isEdit) {
         const idx = State.data.products.findIndex(x => x.id === id);
         State.data.products[idx] = obj;
-        Cloud.saveProduct(obj, false);
+        Cloud.saveProduct(obj);
         Toast.show('Producto actualizado');
       } else {
         State.data.products.push(obj);
-        Cloud.saveProduct(obj, true);
+        Cloud.saveProduct(obj);
         Toast.show('Producto agregado');
       }
       Modal.hide();
@@ -973,12 +973,12 @@ const FixedCosts = {
 
       if (isEdit) {
         Object.assign(fc, { name, category, amount });
-        Cloud.saveFixedCost(fc, false);
+        Cloud.saveFixedCost(fc);
         Toast.show('Costo fijo actualizado');
       } else {
         const newFc = { id: U.id('fc'), name, category, amount };
         State.data.fixedCosts.push(newFc);
-        Cloud.saveFixedCost(newFc, true);
+        Cloud.saveFixedCost(newFc);
         Toast.show('Costo fijo agregado');
       }
       Modal.hide(); this.render();
@@ -1614,7 +1614,7 @@ const Simulator = {
 };
 
 // ============================================
-// EXPORT / RESET
+// EXPORT / RESET / MIGRATE
 // ============================================
 function exportData() {
   const blob = new Blob([JSON.stringify(State.data, null, 2)], { type: 'application/json' });
@@ -1631,6 +1631,61 @@ function resetData() {
     Dashboard.render();
     Nav.switchTab('dashboard');
     Toast.show('Datos restaurados');
+  });
+}
+
+async function migrateData() {
+  const saved = localStorage.getItem('fitpro_data');
+  if (!saved) {
+    Toast.show('No hay datos locales antiguos guardados en tu navegador.', 'info');
+    return;
+  }
+  
+  Confirm.show('¿Subir todos tus 160+ productos locales a la nube? Esto podría tardar unos segundos.', async () => {
+    try {
+      const localData = JSON.parse(saved);
+      const overlay = document.getElementById('loading-overlay');
+      overlay.classList.add('active');
+      document.querySelector('.loading-text').textContent = 'Migrando datos a Supabase, por favor espera...';
+      
+      // Save all ingredients
+      if (localData.ingredients) {
+        for (const ing of localData.ingredients) { await Cloud.saveIngredient(ing); }
+      }
+      
+      // Save all products
+      if (localData.products) {
+        for (const prod of localData.products) { await Cloud.saveProduct(prod); }
+      }
+      
+      // Save all fixed costs
+      if (localData.fixedCosts) {
+        for (const fc of localData.fixedCosts) { await Cloud.saveFixedCost(fc); }
+      }
+      
+      // Save settings
+      if (localData.settings) {
+         await Cloud.saveSettings(localData.settings);
+      }
+      
+      // Reload from cloud
+      await State.load();
+      Dashboard.render();
+      Nav.switchTab('dashboard');
+      
+      // Finish
+      overlay.classList.remove('active');
+      document.querySelector('.loading-text').textContent = 'Conectando con la base de datos...'; // reset text
+      Toast.show('¡Migración completada con éxito! Todos tus productos están en la nube.', 'success');
+      
+      // Hide migrate button so they don't do it again
+      document.getElementById('btn-migrate').style.display = 'none';
+      
+    } catch(e) {
+      document.getElementById('loading-overlay').classList.remove('active');
+      Toast.show('Error al migrar los datos.', 'error');
+      console.error(e);
+    }
   });
 }
 
@@ -1651,5 +1706,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   Dashboard.render();
   document.getElementById('btn-export').addEventListener('click', exportData);
   document.getElementById('btn-reset').addEventListener('click', resetData);
+  document.getElementById('btn-migrate').addEventListener('click', migrateData);
 });
 

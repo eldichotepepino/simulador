@@ -57,16 +57,14 @@ const Cloud = {
     return { ingredients: ingredientsList, products, fixedCosts, settings: generalSettings };
   },
 
-  async saveIngredient(ing, isNew) {
+  async saveIngredient(ing) {
     SyncUI.set('syncing');
     const row = {
       id: ing.id, name: ing.name, category: ing.category, unit: ing.unit,
       purchase_qty: ing.purchaseQty, purchase_price: ing.purchasePrice,
       cost_per_unit: ing.costPerUnit
     };
-    const res = isNew
-      ? await supabase.from('ingredients').insert(row)
-      : await supabase.from('ingredients').update(row).eq('id', ing.id);
+    const res = await supabase.from('ingredients').upsert(row);
     SyncUI.set(res.error ? 'error' : 'synced');
     return !res.error;
   },
@@ -77,7 +75,7 @@ const Cloud = {
     SyncUI.set(res.error ? 'error' : 'synced');
   },
 
-  async saveProduct(prod, isNew) {
+  async saveProduct(prod) {
     SyncUI.set('syncing');
     const row = {
       id: prod.id, name: prod.name, subtitle: prod.subtitle, type: prod.type,
@@ -85,9 +83,7 @@ const Cloud = {
       target_margin: prod.targetMargin, selling_price: prod.sellingPrice,
       price_mode: prod.priceMode
     };
-    const res = isNew
-      ? await supabase.from('products').insert(row)
-      : await supabase.from('products').update(row).eq('id', prod.id);
+    const res = await supabase.from('products').upsert(row);
     if (res.error) { SyncUI.set('error'); return false; }
     // Sync product_ingredients
     await supabase.from('product_ingredients').delete().eq('product_id', prod.id);
@@ -107,12 +103,10 @@ const Cloud = {
     SyncUI.set('synced');
   },
 
-  async saveFixedCost(fc, isNew) {
+  async saveFixedCost(fc) {
     SyncUI.set('syncing');
     const row = { id: fc.id, name: fc.name, amount: fc.amount, category: fc.category };
-    const res = isNew
-      ? await supabase.from('fixed_costs').insert(row)
-      : await supabase.from('fixed_costs').update(row).eq('id', fc.id);
+    const res = await supabase.from('fixed_costs').upsert(row);
     SyncUI.set(res.error ? 'error' : 'synced');
   },
 
