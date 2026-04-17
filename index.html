@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitPro Station — Calculadora de Costos y Precios</title>
+  <meta name="description" content="Herramienta profesional de costeo y fijación de precios para FitPro Station">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay active">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Conectando con la base de datos...</div>
+  </div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="logo-icon">FP</div>
+      <div>
+        <h1>FitPro Station</h1>
+        <p class="header-subtitle">Calculadora de Costos y Precios</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div id="sync-status" class="sync-status">
+        <span class="sync-dot synced"></span>
+        <span class="sync-label">Sincronizado</span>
+      </div>
+      <button id="btn-export" class="btn btn-ghost">📥 Exportar</button>
+      <button id="btn-reset" class="btn btn-danger-ghost">🔄 Reset</button>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="main-nav">
+    <button class="nav-tab active" data-tab="dashboard">
+      <span class="tab-icon">📊</span>
+      <span class="tab-label">Dashboard</span>
+    </button>
+    <button class="nav-tab" data-tab="ingredients">
+      <span class="tab-icon">🧂</span>
+      <span class="tab-label">Ingredientes</span>
+    </button>
+    <button class="nav-tab" data-tab="products">
+      <span class="tab-icon">📦</span>
+      <span class="tab-label">Productos</span>
+    </button>
+    <button class="nav-tab" data-tab="costs">
+      <span class="tab-icon">🏢</span>
+      <span class="tab-label">Costos Fijos</span>
+    </button>
+    <button class="nav-tab" data-tab="simulator">
+      <span class="tab-icon">🔬</span>
+      <span class="tab-label">Simulador</span>
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <section id="tab-dashboard" class="tab-content active"></section>
+    <section id="tab-ingredients" class="tab-content"></section>
+    <section id="tab-products" class="tab-content"></section>
+    <section id="tab-costs" class="tab-content"></section>
+    <section id="tab-simulator" class="tab-content"></section>
+  </main>
+
+  <!-- Modal -->
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-title"></h2>
+        <button id="modal-close" class="modal-close">&times;</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+      <div class="modal-footer">
+        <button id="modal-cancel" class="btn btn-ghost">Cancelar</button>
+        <button id="modal-save" class="btn btn-primary">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Dialog -->
+  <div id="confirm-overlay" class="confirm-overlay">
+    <div class="confirm-box">
+      <h3>⚠️ Confirmar</h3>
+      <p id="confirm-msg"></p>
+      <div class="confirm-actions">
+        <button id="confirm-no" class="btn btn-ghost">Cancelar</button>
+        <button id="confirm-yes" class="btn btn-danger-ghost">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
