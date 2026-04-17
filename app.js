@@ -321,12 +321,14 @@ const U = {
   id(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4); },
   getIng(id) { return State.data.ingredients.find(i => i.id === id); },
 
-  prodVarCost(product, ingOverrides) {
-    if (product.type === 'simple') return product.directCost;
+  prodVarCost(product, ingOverrides, prodOverrides) {
+    if (product.type === 'simple') {
+      return prodOverrides && prodOverrides[product.id] !== undefined ? prodOverrides[product.id] : product.directCost;
+    }
     return (product.ingredients || []).reduce((t, item) => {
       const ing = this.getIng(item.ingredientId);
       if (!ing) return t;
-      const cost = ingOverrides ? (ingOverrides[ing.id] || ing.costPerUnit) : ing.costPerUnit;
+      const cost = ingOverrides && ingOverrides[ing.id] !== undefined ? ingOverrides[ing.id] : ing.costPerUnit;
       return t + cost * item.quantity;
     }, 0);
   },
@@ -341,24 +343,24 @@ const U = {
   priceFromMargin(varCost, margin) { return varCost / (1 - margin / 100); },
   marginFromPrice(varCost, price) { return price > 0 ? ((price - varCost) / price) * 100 : 0; },
 
-  getProductPrice(p) {
-    const vc = this.prodVarCost(p);
+  getProductPrice(p, ingOverrides, prodOverrides) {
+    const vc = this.prodVarCost(p, ingOverrides, prodOverrides);
     if (p.priceMode === 'margin') return this.priceFromMargin(vc, p.targetMargin);
     return p.sellingPrice || this.priceFromMargin(vc, p.targetMargin);
   },
 
-  breakEven(fixedOverrides, ingOverrides) {
+  breakEven(fixedOverrides, ingOverrides, prodOverrides) {
     const totalF = this.totalFixed(fixedOverrides);
-    const prods = State.data.products.filter(p => this.getProductPrice(p) > 0);
+    const prods = State.data.products.filter(p => this.getProductPrice(p, ingOverrides, prodOverrides) > 0);
     if (prods.length === 0) return Infinity;
     
     const profile = State.data.settings.salesProfile || { preparaciones: 40, suplementos: 40, snacks: 15, ropa: 5 };
-    const wMargin = this.weightedMargin(profile) / 100;
+    const wMargin = this.weightedMargin(profile, ingOverrides, prodOverrides) / 100;
     return wMargin > 0 ? Math.ceil(totalF / wMargin) : Infinity;
   },
 
-  weightedMargin(profile) {
-    const prods = State.data.products.filter(p => this.getProductPrice(p) > 0);
+  weightedMargin(profile, ingOverrides, prodOverrides) {
+    const prods = State.data.products.filter(p => this.getProductPrice(p, ingOverrides, prodOverrides) > 0);
     if (prods.length === 0) return 0;
 
     const groupMap = {
@@ -379,8 +381,8 @@ const U = {
       const groupProds = prods.filter(p => groupMap[groupKey] && groupMap[groupKey].includes(p.category));
       let groupMarginSum = 0;
       groupProds.forEach(p => {
-        const vc = this.prodVarCost(p);
-        const price = this.getProductPrice(p);
+        const vc = this.prodVarCost(p, ingOverrides, prodOverrides);
+        const price = this.getProductPrice(p, ingOverrides, prodOverrides);
         groupMarginSum += this.marginFromPrice(vc, price);
       });
       const groupAvgMargin = groupProds.length > 0 ? (groupMarginSum / groupProds.length) : 0;
@@ -390,13 +392,13 @@ const U = {
     return totalWeight > 0 ? (weightedSum / totalWeight) : 0;
   },
 
-  avgMargin() {
-    const prods = State.data.products.filter(p => this.getProductPrice(p) > 0);
+  avgMargin(ingOverrides, prodOverrides) {
+    const prods = State.data.products.filter(p => this.getProductPrice(p, ingOverrides, prodOverrides) > 0);
     if (prods.length === 0) return 0;
     let totalM = 0;
     prods.forEach(p => {
-      const vc = this.prodVarCost(p);
-      const price = this.getProductPrice(p);
+      const vc = this.prodVarCost(p, ingOverrides, prodOverrides);
+      const price = this.getProductPrice(p, ingOverrides, prodOverrides);
       totalM += this.marginFromPrice(vc, price);
     });
     return totalM / prods.length;
@@ -1205,17 +1207,7 @@ const Simulator = {
     return totalM / prods.length;
   },
 
-  _globalAvgMargin(ingOverrides) {
-    const prods = State.data.products.filter(p => U.getProductPrice(p) > 0);
-    if (prods.length === 0) return 0;
-    let totalM = 0;
-    prods.forEach(p => {
-      const vc = U.prodVarCost(p, ingOverrides);
-      const price = U.getProductPrice(p);
-      totalM += price > 0 ? (price - vc) / price : 0;
-    });
-    return totalM / prods.length;
-  },
+
 
   _countProdsInGroup(groupKey) {
     const cats = SIM_GROUPS[groupKey].cats;
@@ -1245,13 +1237,15 @@ const Simulator = {
   // =============================================
   _renderGoal() {
     const totalFixed = U.totalFixed();
-    const avgMargin = this._globalAvgMargin();
+    const profile = State.data.settings.salesProfile || { preparaciones: 40, suplementos: 40, snacks: 15, ropa: 5 };
+    const avgMargin = U.weightedMargin(profile) / 100;
+    
     const prodsWithPrice = State.data.products.filter(p => U.getProductPrice(p) > 0).length;
     const target = this.goalTarget || 0;
 
     const grossNeeded = totalFixed + target;
     const revenueNeeded = avgMargin > 0 ? Math.ceil(grossNeeded / avgMargin) : Infinity;
-    const breakEvenRevenue = avgMargin > 0 ? Math.ceil(totalFixed / avgMargin) : Infinity;
+    const breakEvenRevenue = U.breakEven();
     const dailyTarget = revenueNeeded !== Infinity ? Math.ceil(revenueNeeded / 30) : Infinity;
 
     return `
@@ -1473,32 +1467,20 @@ const Simulator = {
 
     const curFixed = U.totalFixed();
     const simFixed = U.totalFixed(fcOverrides);
+    
+    // Leverage identical algorithm logic to precisely match the Dashboard
     const curBE = U.breakEven();
+    const simBE = U.breakEven(fcOverrides, ingOverrides, prodOverrides);
 
-    // Current avg margin
-    const prodsWP = State.data.products.filter(p => U.getProductPrice(p) > 0);
-    let curTotalMP = 0, simTotalMP = 0;
-    prodsWP.forEach(p => {
-      const vcCur = U.prodVarCost(p);
-      const price = U.getProductPrice(p);
-      curTotalMP += price > 0 ? (price - vcCur) / price : 0;
-      // Simulated var cost
-      let vcSim = U.prodVarCost(p, ingOverrides);
-      if (p.type === 'simple' && prodOverrides[p.id] !== undefined) vcSim = prodOverrides[p.id];
-      simTotalMP += price > 0 ? (price - vcSim) / price : 0;
-    });
-    const curAvgM = prodsWP.length > 0 ? curTotalMP / prodsWP.length : 0;
-    const simAvgM = prodsWP.length > 0 ? simTotalMP / prodsWP.length : 0;
-
-    const simBE = simAvgM > 0 ? Math.ceil(simFixed / simAvgM) : Infinity;
+    const profile = State.data.settings.salesProfile || { preparaciones: 40, suplementos: 40, snacks: 15, ropa: 5 };
+    const curAvgM = U.weightedMargin(profile) / 100;
+    const simAvgM = U.weightedMargin(profile, ingOverrides, prodOverrides) / 100;
 
     // Path A: How much more revenue to maintain same profit level
     const extraRevenue = (simBE === Infinity || curBE === Infinity) ? Infinity : Math.max(0, simBE - curBE);
     
     // Path B: Price increase needed
-    const curGrossMarginTotal = curAvgM;
-    const simGrossMarginTotal = simAvgM;
-    const marginDrop = curGrossMarginTotal - simGrossMarginTotal;
+    const marginDrop = curAvgM - simAvgM;
     const fixedDiff = simFixed - curFixed;
     // Lost margin per unit of revenue
     const lostMargin = marginDrop * (curBE === Infinity ? 0 : curBE) + fixedDiff;
