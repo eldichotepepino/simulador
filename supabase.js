@@ -3,7 +3,7 @@
 // ============================================
 const SUPABASE_URL = 'https://clxsswpwgmetcqponhew.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNseHNzd3B3Z21ldGNxcG9uaGV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNzI1MjMsImV4cCI6MjA5MTk0ODUyM30.LaHod6ArcYvx6bRJsgyEztPLGlp8H5fd-jwdDusu_rM';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const SyncUI = {
   set(status) {
@@ -16,14 +16,14 @@ const SyncUI = {
 };
 
 // Cloud data layer - wraps Supabase calls
-const Cloud = {
+window.Cloud = {
   async loadAll() {
     const [ings, prods, pis, fcs, settings] = await Promise.all([
-      supabase.from('ingredients').select('*').order('name'),
-      supabase.from('products').select('*').order('name'),
-      supabase.from('product_ingredients').select('*'),
-      supabase.from('fixed_costs').select('*').order('name'),
-      supabase.from('settings').select('*')
+      window.supabaseClient.from('ingredients').select('*').order('name'),
+      window.supabaseClient.from('products').select('*').order('name'),
+      window.supabaseClient.from('product_ingredients').select('*'),
+      window.supabaseClient.from('fixed_costs').select('*').order('name'),
+      window.supabaseClient.from('settings').select('*')
     ]);
     if (ings.error || prods.error || pis.error || fcs.error || settings.error) {
       throw new Error('Error loading data');
@@ -64,14 +64,14 @@ const Cloud = {
       purchase_qty: ing.purchaseQty, purchase_price: ing.purchasePrice,
       cost_per_unit: ing.costPerUnit
     };
-    const res = await supabase.from('ingredients').upsert(row);
+    const res = await window.supabaseClient.from('ingredients').upsert(row);
     SyncUI.set(res.error ? 'error' : 'synced');
     return !res.error;
   },
 
   async deleteIngredient(id) {
     SyncUI.set('syncing');
-    const res = await supabase.from('ingredients').delete().eq('id', id);
+    const res = await window.supabaseClient.from('ingredients').delete().eq('id', id);
     SyncUI.set(res.error ? 'error' : 'synced');
   },
 
@@ -83,15 +83,15 @@ const Cloud = {
       target_margin: prod.targetMargin, selling_price: prod.sellingPrice,
       price_mode: prod.priceMode
     };
-    const res = await supabase.from('products').upsert(row);
+    const res = await window.supabaseClient.from('products').upsert(row);
     if (res.error) { SyncUI.set('error'); return false; }
     // Sync product_ingredients
-    await supabase.from('product_ingredients').delete().eq('product_id', prod.id);
+    await window.supabaseClient.from('product_ingredients').delete().eq('product_id', prod.id);
     if (prod.ingredients && prod.ingredients.length > 0) {
       const piRows = prod.ingredients.map(pi => ({
         product_id: prod.id, ingredient_id: pi.ingredientId, quantity: pi.quantity
       }));
-      await supabase.from('product_ingredients').insert(piRows);
+      await window.supabaseClient.from('product_ingredients').insert(piRows);
     }
     SyncUI.set('synced');
     return true;
@@ -99,26 +99,26 @@ const Cloud = {
 
   async deleteProduct(id) {
     SyncUI.set('syncing');
-    await supabase.from('products').delete().eq('id', id);
+    await window.supabaseClient.from('products').delete().eq('id', id);
     SyncUI.set('synced');
   },
 
   async saveFixedCost(fc) {
     SyncUI.set('syncing');
     const row = { id: fc.id, name: fc.name, amount: fc.amount, category: fc.category };
-    const res = await supabase.from('fixed_costs').upsert(row);
+    const res = await window.supabaseClient.from('fixed_costs').upsert(row);
     SyncUI.set(res.error ? 'error' : 'synced');
   },
 
   async deleteFixedCost(id) {
     SyncUI.set('syncing');
-    await supabase.from('fixed_costs').delete().eq('id', id);
+    await window.supabaseClient.from('fixed_costs').delete().eq('id', id);
     SyncUI.set('synced');
   },
 
   async saveSettings(settings) {
     SyncUI.set('syncing');
-    await supabase.from('settings').upsert({ key: 'general', value: settings });
+    await window.supabaseClient.from('settings').upsert({ key: 'general', value: settings });
     SyncUI.set('synced');
   }
 };
