@@ -391,19 +391,6 @@ const U = {
 
     return totalWeight > 0 ? (weightedSum / totalWeight) : 0;
   },
-
-  avgMargin(ingOverrides, prodOverrides) {
-    const prods = State.data.products.filter(p => this.getProductPrice(p, ingOverrides, prodOverrides) > 0);
-    if (prods.length === 0) return 0;
-    let totalM = 0;
-    prods.forEach(p => {
-      const vc = this.prodVarCost(p, ingOverrides, prodOverrides);
-      const price = this.getProductPrice(p, ingOverrides, prodOverrides);
-      totalM += this.marginFromPrice(vc, price);
-    });
-    return totalM / prods.length;
-  },
-
   marginClass(m) { return m >= 35 ? 'margin-good' : m >= 20 ? 'margin-ok' : 'margin-bad'; },
   marginValClass(m) { return m >= 35 ? 'accent' : m >= 20 ? 'warning' : 'danger'; },
 };
@@ -1006,7 +993,8 @@ const Dashboard = {
     const prods = State.data.products;
     const prodsWithPrice = prods.filter(p => U.getProductPrice(p) > 0);
     const breakEven = U.breakEven();
-    const avgMargin = U.avgMargin();
+    const profile = State.data.settings.salesProfile || { preparaciones: 40, suplementos: 40, snacks: 15, ropa: 5 };
+    const avgMargin = U.weightedMargin(profile);
 
     const sortedProds = [...prodsWithPrice].map(p => {
       const vc = U.prodVarCost(p);
@@ -1017,7 +1005,6 @@ const Dashboard = {
     const top5 = sortedProds.slice(0, 5);
     const bottom5 = [...sortedProds].sort((a,b) => a.margin - b.margin).slice(0, 5);
 
-    const profile = State.data.settings.salesProfile || { preparaciones: 40, suplementos: 40, snacks: 15, ropa: 5 };
     const totalProfile = Object.values(profile).reduce((a,b)=>a+b,0);
     const sumValid = Math.abs(totalProfile - 100) < 0.1;
 
