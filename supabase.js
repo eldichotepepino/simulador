@@ -120,5 +120,25 @@ window.Cloud = {
     SyncUI.set('syncing');
     await window.supabaseClient.from('settings').upsert({ key: 'general', value: settings });
     SyncUI.set('synced');
+  },
+
+  async loadPosSync() {
+    const { data, error } = await window.supabaseClient
+      .from('pos_sync')
+      .select('*')
+      .eq('id', 'current')
+      .single();
+    if (error || !data) return null;
+    return data;
+  },
+
+  async triggerSync() {
+    try {
+      const res = await fetch(SUPABASE_URL + '/functions/v1/sync-pos-sales', { method: 'POST' });
+      return await res.json();
+    } catch (e) {
+      console.error('Sync error:', e);
+      return null;
+    }
   }
 };

@@ -987,6 +987,15 @@ const FixedCosts = {
 // DASHBOARD MODULE
 // ============================================
 const Dashboard = {
+  posSync: null,
+  async loadPosSync() {
+    try {
+      this.posSync = await Cloud.loadPosSync();
+    } catch(e) {
+      console.warn('POS sync data not available:', e);
+      this.posSync = null;
+    }
+  },
   render() {
     const container = document.getElementById('tab-dashboard');
     const totalFixed = U.totalFixed();
@@ -1071,6 +1080,90 @@ const Dashboard = {
         </div>
       </div>
 
+      ${this.posSync ? `
+      <div class="metrics-grid" style="grid-template-columns: 1fr; margin-bottom: 0;">
+        <div class="metric-card" style="grid-column: 1 / -1; background: linear-gradient(135deg, rgba(0,230,118,0.04) 0%, rgba(0,176,255,0.04) 100%); border: 1px solid rgba(0,230,118,0.15); padding: 24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 18px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <div class="metric-label" style="color:var(--text-primary); font-weight:700; font-size:1rem;">🌡️ Termómetro de Equilibrio — ${this.posSync.month_label || 'Mes Actual'}</div>
+              <div class="metric-detail" style="margin-top:4px">Datos reales del POS · Día ${this.posSync.day_of_month} del mes · ${this.posSync.sales_count} ventas registradas</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="btn btn-ghost btn-sm" onclick="Dashboard.syncNow()" id="btn-sync-pos" style="font-size:0.72rem;">🔄 Sincronizar Ahora</button>
+              <span style="font-size:0.65rem; color:var(--text-muted);">Últ. sync: ${this.posSync.last_sync ? new Date(this.posSync.last_sync).toLocaleString('es-CO', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'N/A'}</span>
+            </div>
+          </div>
+
+          <div style="display:flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;">
+            <div style="flex:1; min-width:140px; text-align:center; background:rgba(0,0,0,0.15); padding:12px; border-radius:var(--radius-sm);">
+              <div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Ventas Acumuladas</div>
+              <div style="font-size:1.4rem; font-weight:800; color:var(--accent); margin-top:4px;">${U.fmt(Number(this.posSync.total_revenue))}</div>
+            </div>
+            <div style="flex:1; min-width:140px; text-align:center; background:rgba(0,0,0,0.15); padding:12px; border-radius:var(--radius-sm);">
+              <div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Ganancia Bruta</div>
+              <div style="font-size:1.4rem; font-weight:800; color:var(--success); margin-top:4px;">${U.fmt(Number(this.posSync.gross_profit))}</div>
+            </div>
+            <div style="flex:1; min-width:140px; text-align:center; background:rgba(0,0,0,0.15); padding:12px; border-radius:var(--radius-sm);">
+              <div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Costos Fijos</div>
+              <div style="font-size:1.4rem; font-weight:800; color:var(--danger); margin-top:4px;">${U.fmt(Number(this.posSync.fixed_costs))}</div>
+            </div>
+            <div style="flex:1; min-width:140px; text-align:center; background:rgba(0,0,0,0.15); padding:12px; border-radius:var(--radius-sm);">
+              <div style="font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Falta Vender</div>
+              <div style="font-size:1.4rem; font-weight:800; color:${Number(this.posSync.remaining) <= 0 ? 'var(--success)' : 'var(--warning)'}; margin-top:4px;">${Number(this.posSync.remaining) <= 0 ? '✅ ¡Meta alcanzada!' : U.fmt(Number(this.posSync.revenue_needed))}</div>
+            </div>
+          </div>
+
+          <div style="position:relative; margin-bottom: 8px;">
+            <div style="height: 28px; background: rgba(255,255,255,0.05); border-radius: 14px; overflow: hidden; position:relative;">
+              <div style="height: 100%; width: ${Math.min(100, Number(this.posSync.progress))}%; background: linear-gradient(90deg, var(--accent) 0%, ${Number(this.posSync.progress) >= 100 ? 'var(--success)' : 'var(--info)'} 100%); border-radius: 14px; transition: width 1s ease; display:flex; align-items:center; justify-content:center;">
+                <span style="font-size:0.72rem; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${Number(this.posSync.progress).toFixed(1)}%</span>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:6px;">
+              <span style="font-size:0.65rem; color:var(--text-muted);">$0</span>
+              <span style="font-size:0.65rem; color:var(--text-muted); font-weight:600;">Punto de Equilibrio: ${U.fmt(Number(this.posSync.fixed_costs))}</span>
+            </div>
+          </div>
+
+          <div style="text-align:center; padding: 10px; background:${Number(this.posSync.progress) >= 100 ? 'rgba(0,230,118,0.1)' : 'rgba(255,193,7,0.08)'}; border-radius: var(--radius-sm); margin-top: 8px;">
+            <span style="font-size: 0.85rem; font-weight: 600; color: ${Number(this.posSync.progress) >= 100 ? 'var(--success)' : 'var(--warning)'}">
+              ${Number(this.posSync.progress) >= 100 
+                ? '🎉 ¡Felicidades! Ya cubriste todos los costos fijos del mes. Cada venta adicional es GANANCIA NETA.' 
+                : `📅 Día ${this.posSync.day_of_month} del mes — Has cubierto el ${Number(this.posSync.progress).toFixed(1)}% de los costos fijos. ${Number(this.posSync.remaining) > 0 ? 'Necesitas vender ' + U.fmt(Number(this.posSync.revenue_needed)) + ' más para alcanzar el equilibrio.' : ''}`}
+            </span>
+          </div>
+
+          <div style="display:flex; gap: 12px; flex-wrap: wrap; margin-top: 16px;">
+            <div style="flex:1; min-width:100px; text-align:center; padding:8px; background:rgba(0,0,0,0.1); border-radius:var(--radius-sm);">
+              <div style="font-size:0.62rem; color:var(--text-muted); text-transform:uppercase;">🥤 Preparaciones</div>
+              <div style="font-size:1.1rem; font-weight:700; color:var(--accent);">${this.posSync.sales_profile.preparaciones || 0}%</div>
+            </div>
+            <div style="flex:1; min-width:100px; text-align:center; padding:8px; background:rgba(0,0,0,0.1); border-radius:var(--radius-sm);">
+              <div style="font-size:0.62rem; color:var(--text-muted); text-transform:uppercase;">💊 Suplementos</div>
+              <div style="font-size:1.1rem; font-weight:700; color:var(--info);">${this.posSync.sales_profile.suplementos || 0}%</div>
+            </div>
+            <div style="flex:1; min-width:100px; text-align:center; padding:8px; background:rgba(0,0,0,0.1); border-radius:var(--radius-sm);">
+              <div style="font-size:0.62rem; color:var(--text-muted); text-transform:uppercase;">🍫 Snacks/Beb.</div>
+              <div style="font-size:1.1rem; font-weight:700; color:var(--warning);">${this.posSync.sales_profile.snacks || 0}%</div>
+            </div>
+            <div style="flex:1; min-width:100px; text-align:center; padding:8px; background:rgba(0,0,0,0.1); border-radius:var(--radius-sm);">
+              <div style="font-size:0.62rem; color:var(--text-muted); text-transform:uppercase;">👕 Ropa/Otros</div>
+              <div style="font-size:1.1rem; font-weight:700; color:var(--text-secondary);">${this.posSync.sales_profile.ropa || 0}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      ` : `
+      <div class="metrics-grid" style="grid-template-columns: 1fr; margin-bottom: 0;">
+        <div class="metric-card" style="grid-column: 1 / -1; text-align:center; padding: 20px; opacity: 0.7;">
+          <div class="metric-icon">🌡️</div>
+          <div class="metric-label" style="margin-bottom:8px">Termómetro de Equilibrio</div>
+          <div class="metric-detail">Sincronizando datos del POS...</div>
+          <button class="btn btn-ghost btn-sm" onclick="Dashboard.syncNow()" style="margin-top:8px; font-size:0.72rem;">🔄 Sincronizar Ahora</button>
+        </div>
+      </div>
+      `}
+
       <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
         <div class="metric-card">
           <div class="metric-icon">⭐</div>
@@ -1141,6 +1234,21 @@ const Dashboard = {
         </div>`}
       </div>
     `;
+  },
+
+  async syncNow() {
+    const btn = document.getElementById('btn-sync-pos');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Sincronizando...'; }
+    Toast.show('Sincronizando datos del POS...', 'info');
+    const result = await Cloud.triggerSync();
+    if (result && result.success) {
+      this.posSync = await Cloud.loadPosSync();
+      Toast.show('✅ Datos del POS sincronizados correctamente');
+      this.render();
+    } else {
+      Toast.show('Error al sincronizar. Intenta de nuevo.', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Sincronizar Ahora'; }
+    }
   },
 
   renderDonut(fixed, variable) {
@@ -1691,6 +1799,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (overlay) overlay.classList.remove('active');
   Nav.init();
   Modal.init();
+  // Load POS sync data for Dashboard tracker
+  await Dashboard.loadPosSync();
   Dashboard.render();
   document.getElementById('btn-export').addEventListener('click', exportData);
   document.getElementById('btn-reset').addEventListener('click', resetData);
